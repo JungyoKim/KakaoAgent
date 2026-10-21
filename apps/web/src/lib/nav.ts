@@ -13,6 +13,7 @@ export const OWNER_NAV = [
 	{ href: '/settings/rooms', label: '방 관리', icon: 'bubble_left', color: 'yellow' },
 	{ href: '/settings/members', label: '멤버', icon: 'person_2', color: 'blue' },
 	{ href: '/settings/names', label: '이름 표시', icon: 'person', color: 'green' },
+	{ href: '/settings/memory', label: '기억', icon: 'lightbulb', color: 'orange' },
 	{ href: '/settings/system', label: '시스템', icon: 'gear_alt', color: 'gray' }
 ];
 

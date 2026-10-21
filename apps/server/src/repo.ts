@@ -326,6 +326,62 @@ export class Repo {
 
   // ─── agent turns ─────────────────────────────────────────────────────
 
+  // ─── memories (per room and person) ──────────────────────────────────
+
+  private mapMemory = (r: any) => ({
+    id: r.id as number,
+    chatId: r.chat_id as string,
+    userId: r.user_id as string,
+    kind: r.kind as "told" | "observed",
+    text: r.text as string,
+    createdAt: r.created_at as number,
+    updatedAt: r.updated_at as number,
+  })
+
+  /** What the bot remembers about one person in one room: told facts oldest first, then the note. */
+  memories(chatId: string, userId: string) {
+    return this.db
+      .query("SELECT * FROM memories WHERE chat_id = ? AND user_id = ? ORDER BY kind DESC, id")
+      .all(chatId, userId)
+      .map(this.mapMemory)
+  }
+
+  addMemory(chatId: string, userId: string, text: string): number {
+    const t = now()
+    const result = this.db
+      .query("INSERT INTO memories (chat_id, user_id, kind, text, created_at, updated_at) VALUES (?, ?, 'told', ?, ?, ?)")
+      .run(chatId, userId, text, t, t)
+    return Number(result.lastInsertRowid)
+  }
+
+  /** Deletes a person's memories in a room: the given ids, or with null all of them (the note too). */
+  forgetMemories(chatId: string, userId: string, ids: number[] | null): number {
+    if (ids === null) return this.db.query("DELETE FROM memories WHERE chat_id = ? AND user_id = ?").run(chatId, userId).changes
+    let removed = 0
+    const remove = this.db.query("DELETE FROM memories WHERE id = ? AND chat_id = ? AND user_id = ?")
+    for (const id of ids) removed += remove.run(id, chatId, userId).changes
+    return removed
+  }
+
+  /** Replaces a person's nightly note in a room. */
+  setObservedNote(chatId: string, userId: string, text: string) {
+    const t = now()
+    this.db.transaction(() => {
+      this.db.query("DELETE FROM memories WHERE chat_id = ? AND user_id = ? AND kind = 'observed'").run(chatId, userId)
+      this.db
+        .query("INSERT INTO memories (chat_id, user_id, kind, text, created_at, updated_at) VALUES (?, ?, 'observed', ?, ?, ?)")
+        .run(chatId, userId, text, t, t)
+    })()
+  }
+
+  allMemories() {
+    return this.db.query("SELECT * FROM memories ORDER BY chat_id, user_id, kind DESC, id").all().map(this.mapMemory)
+  }
+
+  deleteMemory(id: number): boolean {
+    return this.db.query("DELETE FROM memories WHERE id = ?").run(id).changes > 0
+  }
+
   saveAgentTurn(turn: {
     chatId: string
     userId: string

@@ -1,8 +1,10 @@
-import type { AgentTurnDto, AuthOptions, DiscoveredRoom, Me, MessageHit, RoomKind, RoomStats, SystemStatus } from "@kakao-agent/shared"
+import type { AgentTurnDto, AuthOptions, DiscoveredRoom, Me, MemoryDto, MessageHit, RoomKind, RoomStats, SystemStatus } from "@kakao-agent/shared"
 import { Hono, type Context } from "hono"
 import { deleteCookie, getCookie, setCookie } from "hono/cookie"
 import { z } from "zod"
 import { clientIp, csrfGuard, endSession, randomToken, requireOwner, sessionMiddleware, startSession, Throttle, type AppEnv } from "./auth"
+import type { ChatFn } from "./agent/llm"
+import { refreshNotes } from "./agent/notes"
 import type { Bot } from "./bot/bot"
 import { config } from "./config"
 import { periodStart, RoomData } from "./data/room-data"
@@ -90,6 +92,8 @@ function roomKind(type: string | null): RoomKind {
 export interface ApiOptions {
   /** Tests pass a Kakao client with a fake network. */
   kakao?: KakaoLogin
+  /** The agent's model, when one is configured (for refreshing notes on demand). */
+  chat?: ChatFn
 }
 
 export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
@@ -507,6 +511,48 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
       createdAt: turn.createdAt,
     }))
     return c.json(turns)
+  })
+
+  // ─── memories (owner) ────────────────────────────────────────────────
+
+  api.get("/memories", requireOwner, (c) => {
+    const rooms = new Map(repo.listRooms().map((room) => [room.chatId, room]))
+    const items = repo.allMemories()
+    const names = repo.kakaoNames([...new Set(items.map((m) => m.userId))])
+    const result: MemoryDto[] = items.map((m) => ({
+      id: m.id,
+      roomId: rooms.get(m.chatId)?.id ?? null,
+      room: rooms.get(m.chatId)?.name ?? m.chatId,
+      userId: m.userId,
+      person: names.get(m.userId) ?? `(UID: ${m.userId})`,
+      kind: m.kind,
+      text: m.text,
+      updatedAt: m.updatedAt,
+    }))
+    return c.json(result)
+  })
+
+  api.delete("/memories/:id", requireOwner, (c) => {
+    const id = Number(c.req.param("id"))
+    if (!Number.isInteger(id) || !repo.deleteMemory(id)) return c.json({ error: "기억을 찾을 수 없어요" }, 404)
+    repo.audit(user(c).id, "memory.delete", String(id))
+    return c.json({ ok: true })
+  })
+
+  /** Refreshes the people notes of a room now, from the last few days (the nightly job uses one day). */
+  api.post("/rooms/:id/notes", requireOwner, async (c) => {
+    const room = repo.roomById(c.req.param("id"))
+    if (!room) return c.json({ error: "방을 찾을 수 없어요" }, 404)
+    if (!options.chat) return c.json({ error: "LLM이 설정되지 않았어요" }, 400)
+    if (!bot.outbox.canSend(room.chatId)) return c.json({ error: "에이전트가 켜진 방에서만 정리할 수 있어요" }, 400)
+    const input = await body(c, z.object({ days: z.number().int().min(1).max(90).default(7) }))
+    if (isResponse(input)) return input
+    // A room with many people takes minutes, longer than a request may stay open: it runs on its own.
+    const ownerId = user(c).id
+    void refreshNotes({ repo, chat: options.chat, room, since: periodStart(input.days) ?? 0, log: console.log }).then((updated) =>
+      repo.audit(ownerId, "memory.refresh", room.name, { days: input.days, updated }),
+    )
+    return c.json({ started: true }, 202)
   })
 
   api.notFound((c) => c.json({ error: "없는 API예요" }, 404))

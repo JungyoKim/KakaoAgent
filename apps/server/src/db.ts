@@ -114,6 +114,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX agent_turns_chat ON agent_turns(chat_id, created_at);
   `,
+  // v4: what the bot remembers about each person, per room. "told" are facts a person asked the bot
+  // to remember about themselves; "observed" is one nightly note per person from their messages.
+  `
+  CREATE TABLE memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('told', 'observed')),
+    text TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX memories_person ON memories(chat_id, user_id);
+  `,
 ]
 
 export function openDb(file: string): Database {

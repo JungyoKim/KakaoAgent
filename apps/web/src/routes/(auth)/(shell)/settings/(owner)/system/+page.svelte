@@ -26,6 +26,8 @@
 		'system.resume': '다시 시작',
 		'system.limits': '보내기 한도 변경',
 		'name.alias': '표시 이름 변경',
+		'memory.delete': '기억 지움',
+		'memory.refresh': '메모 정리',
 		'setup.owner': '방장 계정 만듦'
 	};
 

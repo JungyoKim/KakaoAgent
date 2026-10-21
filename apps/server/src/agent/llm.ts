@@ -23,13 +23,13 @@ export interface ChatResult {
   usage: { prompt: number; completion: number }
 }
 
-export type ChatFn = (input: { messages: ChatMessage[]; tools?: ToolSpec[] }) => Promise<ChatResult>
+/** timeoutMs bounds the whole call, retry included. */
+export type ChatFn = (input: { messages: ChatMessage[]; tools?: ToolSpec[]; timeoutMs?: number }) => Promise<ChatResult>
 
 export class LlmError extends Error {}
 
 export function openAiChat(options: { baseUrl: string; apiKey: string; model: string; timeoutMs?: number }): ChatFn {
-  const timeoutMs = options.timeoutMs ?? 60_000
-  const call = async (body: unknown): Promise<ChatResult> => {
+  const call = async (body: unknown, timeoutMs: number): Promise<ChatResult> => {
     const response = await fetch(`${options.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${options.apiKey}` },
@@ -52,14 +52,21 @@ export function openAiChat(options: { baseUrl: string; apiKey: string; model: st
       usage: { prompt: Number(data.usage?.prompt_tokens ?? 0), completion: Number(data.usage?.completion_tokens ?? 0) },
     }
   }
-  return async ({ messages, tools }) => {
+  return async ({ messages, tools, timeoutMs }) => {
     const body = { model: options.model, messages, ...(tools?.length ? { tools } : {}), max_tokens: 1200 }
+    const deadline = Date.now() + (timeoutMs ?? options.timeoutMs ?? 60_000)
+    // A single attempt gets at most 25 seconds, so a stuck provider leaves time to try another.
+    const attempt = () => {
+      const left = deadline - Date.now()
+      if (left < 3_000) throw new LlmError("LLM이 제때 답하지 않았어요")
+      return call(body, Math.min(25_000, left))
+    }
     try {
-      return await call(body)
+      return await attempt()
     } catch (error) {
-      // One retry: the router often has another provider ready when one is rate-limited or down.
-      if (error instanceof Error && error.name === "TimeoutError") throw new LlmError("LLM이 응답하지 않았어요")
-      return await call(body)
+      // One retry: the router often has another provider ready when one is slow, rate-limited or down.
+      if (error instanceof LlmError && /제때/.test(error.message)) throw error
+      return await attempt()
     }
   }
 }

@@ -147,3 +147,16 @@ export interface AgentTurnDto {
   error: string | null
   createdAt: number
 }
+
+/** Something the bot remembers about a person in a room. */
+export interface MemoryDto {
+  id: number
+  roomId: string | null
+  room: string
+  userId: string
+  person: string
+  /** told: the person asked the bot to remember it; observed: the nightly note from their messages. */
+  kind: "told" | "observed"
+  text: string
+  updatedAt: number
+}

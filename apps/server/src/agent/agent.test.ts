@@ -139,6 +139,18 @@ describe("Agent", () => {
     expect(repo.memories(TEST_ROOM, "1").map((m) => m.text)).toEqual(["봇 테스트 중"])
   })
 
+  test("an answer that drifts into Japanese is rewritten in Korean", async () => {
+    let call = 0
+    const { agent, sent } = setup(async () => {
+      call++
+      return { message: { content: call === 1 ? "テストの記憶を削除했어" : "테스트 기억을 지웠어" }, model: "fake", usage: { prompt: 1, completion: 1 } }
+    })
+    agent.handle(message(TEST_ROOM, "/bot 안녕"))
+    await agent.idle()
+    expect(call).toBe(2)
+    expect(sent).toEqual([{ chatId: TEST_ROOM, text: "🤖 테스트 기억을 지웠어" }])
+  })
+
   test("showing and wiping your memories needs no model", async () => {
     let calls = 0
     const { repo, agent, sent } = setup(async () => {

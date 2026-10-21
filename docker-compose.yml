@@ -16,6 +16,7 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://10.10.20.100:3001/v1}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_MODEL: ${LLM_MODEL:-auto}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-auto}
       AGENT_COMMAND: ${AGENT_COMMAND:-/bot}
     volumes:
       - kakao-agent-data:/app/data

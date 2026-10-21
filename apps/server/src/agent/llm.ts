@@ -28,7 +28,12 @@ export type ChatFn = (input: { messages: ChatMessage[]; tools?: ToolSpec[]; time
 
 export class LlmError extends Error {}
 
-export function openAiChat(options: { baseUrl: string; apiKey: string; model: string; timeoutMs?: number }): ChatFn {
+/**
+ * models: the first is tried first; the retry goes to the next one (e.g. a fast model, then "auto"
+ * so freellmapi can route around a provider that is slow or out of quota).
+ */
+export function openAiChat(options: { baseUrl: string; apiKey: string; models: string[]; timeoutMs?: number }): ChatFn {
+  const models = options.models.filter(Boolean).length ? options.models.filter(Boolean) : ["auto"]
   const call = async (body: unknown, timeoutMs: number): Promise<ChatResult> => {
     const response = await fetch(`${options.baseUrl}/chat/completions`, {
       method: "POST",
@@ -48,25 +53,25 @@ export function openAiChat(options: { baseUrl: string; apiKey: string; model: st
     const message = data.choices[0].message
     return {
       message: { content: message.content ?? null, tool_calls: message.tool_calls?.length ? message.tool_calls : undefined },
-      model: String(data.model ?? options.model),
+      model: String(data.model ?? (body as { model: string }).model),
       usage: { prompt: Number(data.usage?.prompt_tokens ?? 0), completion: Number(data.usage?.completion_tokens ?? 0) },
     }
   }
   return async ({ messages, tools, timeoutMs }) => {
-    const body = { model: options.model, messages, ...(tools?.length ? { tools } : {}), max_tokens: 1200 }
+    const bodyFor = (model: string) => ({ model, messages, ...(tools?.length ? { tools } : {}), max_tokens: 1200 })
     const deadline = Date.now() + (timeoutMs ?? options.timeoutMs ?? 60_000)
-    // A single attempt gets at most 25 seconds, so a stuck provider leaves time to try another.
-    const attempt = () => {
+    // A single attempt gets at most 20 seconds, so a stuck provider leaves time to try another.
+    const attempt = (n: number) => {
       const left = deadline - Date.now()
       if (left < 3_000) throw new LlmError("LLM이 제때 답하지 않았어요")
-      return call(body, Math.min(25_000, left))
+      return call(bodyFor(models[Math.min(n, models.length - 1)]!), Math.min(20_000, left))
     }
     try {
-      return await attempt()
+      return await attempt(0)
     } catch (error) {
       // One retry: the router often has another provider ready when one is slow, rate-limited or down.
       if (error instanceof LlmError && /제때/.test(error.message)) throw error
-      return await attempt()
+      return await attempt(1)
     }
   }
 }

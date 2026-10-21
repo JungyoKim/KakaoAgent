@@ -113,4 +113,22 @@ describe("Agent", () => {
     expect(sent[0]!.text).toStartWith("🤖 지금은 답을 만들지 못했어요")
     expect(repo.agentTurns(1)[0]!.error).toBe("LLM 503: busy")
   })
+
+  test("when the model gives out after saving a memory, the save itself is the reply", async () => {
+    let step = 0
+    const { repo, agent, sent } = setup(async () => {
+      if (step++ === 0) {
+        return {
+          message: { content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "remember", arguments: '{"fact":"봇 테스트 중"}' } }] },
+          model: "fake",
+          usage: { prompt: 1, completion: 1 },
+        }
+      }
+      throw new Error("The operation timed out.")
+    })
+    agent.handle(message(TEST_ROOM, "/bot 나 봇 테스트 중이라고 기억해 줘"))
+    await agent.idle()
+    expect(sent[0]!.text).toMatch(/^🤖 준교에 대해 기억했어요 \(#\d+\): 봇 테스트 중$/)
+    expect(repo.memories(TEST_ROOM, "1").map((m) => m.text)).toEqual(["봇 테스트 중"])
+  })
 })

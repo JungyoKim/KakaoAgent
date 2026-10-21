@@ -9,6 +9,8 @@ const MAX_STEPS = 6
 const ANSWER_DEADLINE_MS = 50_000
 const MAX_ANSWER = 2000
 const PREFIX = "🤖 "
+/** Tools whose result already reads as an answer, used when the model fails after running them. */
+const SELF_EXPLAINING = new Set(["remember", "forget", "my_memory"])
 /** Questions one person may ask per minute; more get a short "slow down". */
 const PER_MINUTE = 5
 
@@ -156,6 +158,7 @@ export class Agent {
 
     let answer: string | null = null
     let error: string | null = null
+    let fallback: string | null = null
     try {
       for (let step = 0; step < MAX_STEPS && answer === null; step++) {
         const left = started + ANSWER_DEADLINE_MS - this.now()
@@ -185,6 +188,7 @@ export class Agent {
           } catch (toolError) {
             output = `도구 오류: ${toolError instanceof Error ? toolError.message : String(toolError)}`
           }
+          if (SELF_EXPLAINING.has(call.function.name)) fallback = output
           messages.push({ role: "tool", tool_call_id: call.id, content: output })
         }
       }
@@ -192,7 +196,8 @@ export class Agent {
       error = llmError instanceof Error ? llmError.message : String(llmError)
     }
 
-    const reply = answer ? plainText(answer).slice(0, MAX_ANSWER) : null
+    // When the model gave out after a memory tool ran, that tool's own result is the answer.
+    const reply = answer ? plainText(answer).slice(0, MAX_ANSWER) : fallback
     try {
       await this.deps.send(chatId, PREFIX + (reply ?? "지금은 답을 만들지 못했어요. 잠시 뒤에 다시 물어봐 주세요."))
     } catch (sendError) {

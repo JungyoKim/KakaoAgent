@@ -21,7 +21,10 @@ if (ownerSetupNeeded(repo)) {
 if (!config.kakaoRestApiKey) console.warn("[boot] KAKAO_REST_API_KEY is not set: nobody can sign in")
 
 const bot = new Bot(repo, config)
-const chat = config.llmBaseUrl && config.llmApiKey ? openAiChat({ baseUrl: config.llmBaseUrl, apiKey: config.llmApiKey, model: config.llmModel }) : null
+const chat =
+  config.llmBaseUrl && config.llmApiKey
+    ? openAiChat({ baseUrl: config.llmBaseUrl, apiKey: config.llmApiKey, models: [config.llmModel, config.llmFallbackModel] })
+    : null
 if (chat) {
   const agent = new Agent({
     repo,
@@ -39,7 +42,7 @@ if (chat) {
       await refreshNotes({ repo, chat, room, since: Date.now() - 24 * 60 * 60 * 1000, log: console.log })
     }
   }, console.log)
-  console.log(`[boot] agent on: "${config.agentCommand}" → ${config.llmModel} at ${config.llmBaseUrl}`)
+  console.log(`[boot] agent on: "${config.agentCommand}" → ${config.llmModel} (then ${config.llmFallbackModel}) at ${config.llmBaseUrl}`)
 } else {
   console.warn("[boot] LLM_BASE_URL or LLM_API_KEY is not set: the agent is off")
 }

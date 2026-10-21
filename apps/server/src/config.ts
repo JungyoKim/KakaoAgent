@@ -48,6 +48,8 @@ export const config = {
   llmBaseUrl: (env.LLM_BASE_URL ?? "").replace(/\/$/, ""),
   llmApiKey: env.LLM_API_KEY ?? "",
   llmModel: env.LLM_MODEL ?? "auto",
+  /** Tried when the first model is slow, out of quota or failing. */
+  llmFallbackModel: env.LLM_FALLBACK_MODEL ?? "auto",
   /** A message starting with this calls the agent, e.g. "/bot 이번 주 통계". */
   agentCommand: (env.AGENT_COMMAND ?? "/bot").toLowerCase(),
   timezone: "Asia/Seoul",

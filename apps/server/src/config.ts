@@ -44,6 +44,12 @@ export const config = {
   cookieSecure: bool(env.COOKIE_SECURE, production),
   /** Lets web requests reach private/LAN addresses. Off by default to protect the homelab. */
   allowPrivateFetch: bool(env.ALLOW_PRIVATE_FETCH, false),
+  /** OpenAI-compatible endpoint for the agent (freellmapi on Dokploy), its key and model. */
+  llmBaseUrl: (env.LLM_BASE_URL ?? "").replace(/\/$/, ""),
+  llmApiKey: env.LLM_API_KEY ?? "",
+  llmModel: env.LLM_MODEL ?? "auto",
+  /** A message starting with this calls the agent, e.g. "/bot 이번 주 통계". */
+  agentCommand: (env.AGENT_COMMAND ?? "/bot").toLowerCase(),
   timezone: "Asia/Seoul",
   webDist: path.resolve(env.WEB_DIST ?? path.join(import.meta.dir, "..", "..", "web", "dist")),
 }

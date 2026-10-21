@@ -3,6 +3,8 @@ import path from "node:path"
 import { Hono, type Context } from "hono"
 import { serveStatic } from "hono/bun"
 import { createApi } from "./api"
+import { Agent } from "./agent/agent"
+import { openAiChat } from "./agent/llm"
 import { Bot } from "./bot/bot"
 import { config } from "./config"
 import { openDb } from "./db"
@@ -18,6 +20,20 @@ if (ownerSetupNeeded(repo)) {
 if (!config.kakaoRestApiKey) console.warn("[boot] KAKAO_REST_API_KEY is not set: nobody can sign in")
 
 const bot = new Bot(repo, config)
+if (config.llmBaseUrl && config.llmApiKey) {
+  const agent = new Agent({
+    repo,
+    send: (chatId, text) => bot.outbox.sendText(chatId, text),
+    canSend: (chatId) => bot.outbox.canSend(chatId),
+    chat: openAiChat({ baseUrl: config.llmBaseUrl, apiKey: config.llmApiKey, model: config.llmModel }),
+    command: config.agentCommand,
+    log: console.log,
+  })
+  bot.onMessage(agent.handle)
+  console.log(`[boot] agent on: "${config.agentCommand}" → ${config.llmModel} at ${config.llmBaseUrl}`)
+} else {
+  console.warn("[boot] LLM_BASE_URL or LLM_API_KEY is not set: the agent is off")
+}
 await bot.start()
 
 const app = new Hono()

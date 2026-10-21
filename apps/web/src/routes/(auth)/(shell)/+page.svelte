@@ -1,10 +1,10 @@
 <script lang="ts">
-	import type { RoomDto, SystemStatus } from '@kakao-agent/shared';
+	import type { AgentTurnDto, RoomDto, SystemStatus } from '@kakao-agent/shared';
 	import Icon from '$lib/components/icon.svelte';
 	import NodeIcon from '$lib/components/node-icon.svelte';
 	import Page from '$lib/components/page.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { timeAgo } from '$lib/format';
+	import { dateTime, timeAgo } from '$lib/format';
 	import { ROOM_KIND_ICON, ROOM_KIND_LABEL } from '$lib/labels';
 	import { currentUser } from '$lib/me.svelte';
 	import { useQuery } from '$lib/query.svelte';
@@ -13,6 +13,7 @@
 	const owner = $derived(me.role === 'owner');
 	const status = useQuery<SystemStatus>(() => '/system/status', { interval: 20_000 });
 	const rooms = useQuery<RoomDto[]>(() => '/rooms');
+	const turns = useQuery<AgentTurnDto[]>(() => (owner ? '/agent/turns?limit=5' : null), { interval: 15_000 });
 
 	const CARD = 'rounded-[1.625rem] bg-card';
 	const HEADER = 'px-4 text-xs font-semibold text-muted-foreground';
@@ -91,4 +92,30 @@
 			<p class="px-4 text-sm text-muted-foreground">아직 볼 수 있는 방이 없어요</p>
 		{/if}
 	</section>
+
+	{#if owner}
+		<section class="flex flex-col gap-2">
+			<h2 class={HEADER}>최근 /bot 대화</h2>
+			{#if turns.data?.length}
+				<div class="{CARD} flex flex-col overflow-hidden">
+					{#each turns.data as turn (turn.id)}
+						<div class="flex flex-col gap-1 border-b px-4 py-3 last:border-b-0">
+							<p class="text-sm font-medium break-words">{turn.sender}: {turn.question}</p>
+							{#if turn.answer}
+								<p class="line-clamp-4 text-sm break-words whitespace-pre-line text-muted-foreground">{turn.answer}</p>
+							{/if}
+							{#if turn.error}
+								<p class="text-xs text-destructive">{turn.error}</p>
+							{/if}
+							<p class="text-xs text-muted-foreground/80">
+								{turn.room} · {dateTime(turn.createdAt)} · {(turn.ms / 1000).toFixed(1)}초{turn.tools.length ? ` · ${turn.tools.join(', ')}` : ''}{turn.model ? ` · ${turn.model}` : ''}
+							</p>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="px-4 text-sm text-muted-foreground">카카오톡에서 /bot 뒤에 질문을 적으면 여기에 기록돼요</p>
+			{/if}
+		</section>
+	{/if}
 </Page>

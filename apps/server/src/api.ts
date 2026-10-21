@@ -1,4 +1,4 @@
-import type { AuthOptions, DiscoveredRoom, Me, MessageHit, RoomKind, RoomStats, SystemStatus } from "@kakao-agent/shared"
+import type { AgentTurnDto, AuthOptions, DiscoveredRoom, Me, MessageHit, RoomKind, RoomStats, SystemStatus } from "@kakao-agent/shared"
 import { Hono, type Context } from "hono"
 import { deleteCookie, getCookie, setCookie } from "hono/cookie"
 import { z } from "zod"
@@ -488,6 +488,26 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
   })
 
   api.get("/audit", requireOwner, (c) => c.json(repo.listAudit(Math.min(500, Number(c.req.query("limit") ?? 200)))))
+
+  // ─── agent (owner) ───────────────────────────────────────────────────
+
+  api.get("/agent/turns", requireOwner, (c) => {
+    const rooms = new Map(repo.listRooms().map((room) => [room.chatId, room.name]))
+    const turns: AgentTurnDto[] = repo.agentTurns(Math.min(100, Number(c.req.query("limit") ?? 20) || 20)).map((turn) => ({
+      id: turn.id,
+      room: rooms.get(turn.chatId) ?? turn.chatId,
+      sender: turn.sender,
+      question: turn.question,
+      answer: turn.answer,
+      tools: turn.tools.map((tool) => tool.name),
+      model: turn.model,
+      tokens: turn.promptTokens + turn.completionTokens,
+      ms: turn.ms,
+      error: turn.error,
+      createdAt: turn.createdAt,
+    }))
+    return c.json(turns)
+  })
 
   api.notFound((c) => c.json({ error: "없는 API예요" }, 404))
   api.onError((error, c) => {

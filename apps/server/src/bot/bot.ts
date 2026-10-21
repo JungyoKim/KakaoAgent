@@ -110,7 +110,8 @@ export class Bot {
           chatId: message.room.chatId,
           userId: message.senderId,
           type: message.type,
-          kind: message.kind,
+          // The bot's own sends (agent answers) are kept apart from the room's conversation.
+          kind: message.fromBot ? "봇" : message.kind,
           text: message.text,
           attachment: message.attachmentRaw,
           createdAt: message.time.getTime(),

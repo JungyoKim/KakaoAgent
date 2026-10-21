@@ -324,6 +324,64 @@ export class Repo {
       .run(chatId, done ? 1 : 0, now())
   }
 
+  // ─── agent turns ─────────────────────────────────────────────────────
+
+  saveAgentTurn(turn: {
+    chatId: string
+    userId: string
+    sender: string
+    question: string
+    answer: string | null
+    tools: { name: string; args: string }[]
+    model: string | null
+    promptTokens: number
+    completionTokens: number
+    ms: number
+    error: string | null
+  }) {
+    this.db
+      .query(
+        `INSERT INTO agent_turns (chat_id, user_id, sender, question, answer, tools, model, prompt_tokens, completion_tokens, ms, error, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        turn.chatId,
+        turn.userId,
+        turn.sender,
+        turn.question,
+        turn.answer,
+        JSON.stringify(turn.tools),
+        turn.model,
+        turn.promptTokens,
+        turn.completionTokens,
+        turn.ms,
+        turn.error,
+        now(),
+      )
+  }
+
+  /** Latest agent turns, newest first; with chatId only that room's. */
+  agentTurns(limit: number, chatId?: string) {
+    const rows = (chatId
+      ? this.db.query("SELECT * FROM agent_turns WHERE chat_id = ? ORDER BY id DESC LIMIT ?").all(chatId, limit)
+      : this.db.query("SELECT * FROM agent_turns ORDER BY id DESC LIMIT ?").all(limit)) as any[]
+    return rows.map((r) => ({
+      id: r.id as number,
+      chatId: r.chat_id as string,
+      userId: r.user_id as string,
+      sender: r.sender as string,
+      question: r.question as string,
+      answer: (r.answer ?? null) as string | null,
+      tools: json<{ name: string; args: string }[]>(r.tools, []),
+      model: (r.model ?? null) as string | null,
+      promptTokens: (r.prompt_tokens ?? 0) as number,
+      completionTokens: (r.completion_tokens ?? 0) as number,
+      ms: (r.ms ?? 0) as number,
+      error: (r.error ?? null) as string | null,
+      createdAt: r.created_at as number,
+    }))
+  }
+
   seeKakaoUser(userId: string, kakaoName: string | null, chatId: string) {
     this.db
       .query(

@@ -35,7 +35,8 @@ export class RoomData {
 
   /** The room condition first, then extra conditions with their arguments, then the period. */
   private where(range: Range, extra: string[] = [], extraArgs: (string | number)[] = []): { sql: string; args: (string | number)[] } {
-    const parts = ["chat_id = ?", ...extra]
+    // The bot's own answers are left out: they are not the room's conversation.
+    const parts = ["chat_id = ?", "kind != '봇'", ...extra]
     const args: (string | number)[] = [this.chatId, ...extraArgs]
     if (range.from != null) {
       parts.push("created_at >= ?")
@@ -125,6 +126,25 @@ export class RoomData {
     const step = rows.length / limit
     const picked = rows.length <= limit ? rows : Array.from({ length: limit }, (_, i) => rows[Math.floor(i * step)])
     return this.hits(picked)
+  }
+
+  /** The latest messages, oldest first, optionally only those before a log id. */
+  recent(limit = 20, beforeLogId?: number): MessageHit[] {
+    const { sql, args } = beforeLogId ? this.where({}, ["log_id < ?"], [beforeLogId]) : this.where({})
+    const rows = this.db
+      .query(`SELECT log_id, user_id, kind, text, created_at FROM messages WHERE ${sql} ORDER BY created_at DESC, log_id DESC LIMIT ?`)
+      .all(...args, Math.min(200, Math.max(1, limit))) as any[]
+    return this.hits(rows.reverse())
+  }
+
+  /** Everyone who has spoken in the room, most messages first, with their display names. */
+  speakers(): PersonCount[] {
+    const { sql, args } = this.where({})
+    const rows = this.db
+      .query(`SELECT user_id, COUNT(*) AS n FROM messages WHERE ${sql} GROUP BY user_id ORDER BY n DESC`)
+      .all(...args) as { user_id: string; n: number }[]
+    const names = this.names(rows.map((row) => row.user_id))
+    return rows.map((row) => ({ userId: row.user_id, name: this.name(names, row.user_id), count: row.n }))
   }
 
   private hits(rows: any[]): MessageHit[] {

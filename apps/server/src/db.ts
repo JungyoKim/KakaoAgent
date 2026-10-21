@@ -95,6 +95,25 @@ const MIGRATIONS: string[] = [
   );
   UPDATE rooms SET member_visible = 0 WHERE kind IN ('direct', 'memo');
   `,
+  // v3: every agent answer: who asked what, the answer, the tools it used, the model and cost.
+  `
+  CREATE TABLE agent_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT,
+    tools TEXT,
+    model TEXT,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    ms INTEGER,
+    error TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX agent_turns_chat ON agent_turns(chat_id, created_at);
+  `,
 ]
 
 export function openDb(file: string): Database {

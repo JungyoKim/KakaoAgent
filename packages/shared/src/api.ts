@@ -132,3 +132,18 @@ export interface MessageHit {
   kind: string
   text: string
 }
+
+/** One "/bot" question and how it was answered. */
+export interface AgentTurnDto {
+  id: number
+  room: string
+  sender: string
+  question: string
+  answer: string | null
+  tools: string[]
+  model: string | null
+  tokens: number
+  ms: number
+  error: string | null
+  createdAt: number
+}

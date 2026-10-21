@@ -1,7 +1,8 @@
 
 /** Main pages: the sidebar on wide screens, the tab bar on phones. */
 export const MAIN_NAV = [
-	{ href: '/', label: '홈', icon: 'house' }
+	{ href: '/', label: '홈', icon: 'house' },
+	{ href: '/stats', label: '통계', icon: 'chart_bar' }
 ];
 
 /**

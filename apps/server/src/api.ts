@@ -1,12 +1,13 @@
-import type { AuthOptions, DiscoveredRoom, Me, RoomKind, SystemStatus } from "@kakao-agent/shared"
+import type { AuthOptions, DiscoveredRoom, Me, MessageHit, RoomKind, RoomStats, SystemStatus } from "@kakao-agent/shared"
 import { Hono, type Context } from "hono"
 import { deleteCookie, getCookie, setCookie } from "hono/cookie"
 import { z } from "zod"
 import { clientIp, csrfGuard, endSession, randomToken, requireOwner, sessionMiddleware, startSession, Throttle, type AppEnv } from "./auth"
 import type { Bot } from "./bot/bot"
 import { config } from "./config"
+import { periodStart, RoomData } from "./data/room-data"
 import { KakaoLogin, type KakaoProfile } from "./kakao"
-import type { Repo, UserRow } from "./repo"
+import type { Repo, RoomRow, UserRow } from "./repo"
 import { clearSetupToken, ownerSetupNeeded, setupTokenValid } from "./setup"
 
 const loginThrottle = new Throttle(30, 15 * 60 * 1000)
@@ -105,6 +106,12 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
   const back = (c: Context, path: string, error?: string) =>
     c.redirect(error ? `${path}${path.includes("?") ? "&" : "?"}error=${error}` : path)
   const roomDto = (current: UserRow, room: Parameters<Repo["roomDto"]>[0]) => repo.roomDto(room, current.role === "owner" ? bot.outbox : null)
+  /** A room the signed-in account may see, or null (unknown rooms and hidden ones look the same). */
+  const visibleRoom = (c: Context<AppEnv>): RoomRow | null => {
+    const room = repo.roomById(c.req.param("id") ?? "")
+    return room && repo.usableRoomIds(user(c).id).has(room.id) ? room : null
+  }
+  const roomData = (room: RoomRow) => new RoomData(repo.db, room.chatId, (ids) => repo.kakaoNames(ids))
 
   // ─── sign in with Kakao ──────────────────────────────────────────────
 
@@ -330,6 +337,7 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
     if (repo.roomByChatId(input.chatId)) return c.json({ error: "이미 등록된 방이에요" }, 409)
     const room = repo.createRoom(input)
     repo.audit(user(c).id, "room.create", room.name, { chatId: room.chatId })
+    bot.syncRoom(room)
     return c.json(roomDto(user(c), room))
   })
 
@@ -351,7 +359,9 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
     }
     repo.updateRoom(room.id, input)
     repo.audit(user(c).id, "room.update", room.name, input)
-    return c.json(roomDto(user(c), repo.roomById(room.id)!))
+    const updated = repo.roomById(room.id)!
+    if (updated.enabled) bot.syncRoom(updated)
+    return c.json(roomDto(user(c), updated))
   })
 
   api.delete("/rooms/:id", requireOwner, (c) => {
@@ -360,6 +370,34 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
     repo.deleteRoom(room.id)
     repo.audit(user(c).id, "room.delete", room.name, { chatId: room.chatId })
     return c.json({ ok: true })
+  })
+
+  // ─── room data (stats and search, one room at a time) ────────────────
+
+  api.get("/rooms/:id/stats", (c) => {
+    const room = visibleRoom(c)
+    if (!room) return c.json({ error: "방을 찾을 수 없어요" }, 404)
+    const days = Math.max(0, Math.min(3650, Number(c.req.query("days") ?? 7) || 0))
+    const from = periodStart(days)
+    const stats: RoomStats = {
+      room: { id: room.id, name: room.name },
+      from,
+      ...roomData(room).stats({ from }),
+      sync: { done: repo.roomSync(room.chatId).done && !bot.backfill.isRunning(room.chatId), stored: repo.messageCount(room.chatId) },
+    }
+    return c.json(stats)
+  })
+
+  api.get("/rooms/:id/messages", (c) => {
+    const room = visibleRoom(c)
+    if (!room) return c.json({ error: "방을 찾을 수 없어요" }, 404)
+    const userId = c.req.query("userId")
+    const hits: MessageHit[] = roomData(room).search({
+      query: (c.req.query("q") ?? "").slice(0, 100),
+      userId: userId && /^\d{1,20}$/.test(userId) ? userId : undefined,
+      limit: Number(c.req.query("limit") ?? 50) || 50,
+    })
+    return c.json(hits)
   })
 
   // ─── members (owner) ─────────────────────────────────────────────────

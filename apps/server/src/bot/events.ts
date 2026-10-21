@@ -27,6 +27,8 @@ export interface BotMessage {
   fileNames: string[]
   /** Parsed attachment JSON, or null. */
   attachment: any
+  /** The attachment JSON exactly as KakaoTalk stores it (64-bit ids intact), or null. */
+  attachmentRaw: string | null
   /** True when this is the echo of a message the bot itself just sent. */
   fromBot: boolean
 }
@@ -36,12 +38,19 @@ export interface EventProcessorDeps {
   iris: IrisClient
   isEcho(chatId: string, text: string): boolean
   botUserId(): string | null
+  botName(): string | null
   emit(message: BotMessage): Promise<void>
   log(message: string): void
 }
 
 /** Feed messages (joins, leaves, deletions, edits) are JSON with a feedType. */
 const isFeed = (message: string) => message.startsWith("{") && message.includes("feedType")
+
+/** feedType 25 is an edit; its logId is the edited message's server log id (64-bit, read as text). */
+function editedServerId(message: string): string | null {
+  if (Number(message.match(/"feedType"\s*:\s*(\d+)/)?.[1]) !== 25) return null
+  return message.match(/"logId"\s*:\s*"?(\d+)"?/)?.[1] ?? null
+}
 
 /**
  * Turns raw Iris events into BotMessages for registered rooms. Every room, registered or not,
@@ -62,9 +71,13 @@ export class EventProcessor {
     const userId = String(raw.user_id ?? "")
     const feed = isFeed(payload.msg)
     if (!feed && userId && payload.sender) this.deps.repo.learnKakaoName(userId, payload.sender)
-    if (feed) return
     const room = this.deps.repo.roomByChatId(chatId)
     if (!room || !room.enabled) return
+    if (feed) {
+      const serverId = editedServerId(payload.msg)
+      if (serverId) await this.applyEdit(room, serverId)
+      return
+    }
 
     const type = Number(raw.type ?? 0)
     const createdAt = Number(raw.created_at)
@@ -85,8 +98,16 @@ export class EventProcessor {
       imageUrls: extractImageUrls(att),
       fileNames: extractFileNames(att),
       attachment: att,
+      attachmentRaw: typeof raw.attachment === "string" && raw.attachment !== "{}" ? raw.attachment : null,
       fromBot: userId !== "" && userId === this.deps.botUserId() && this.deps.isEcho(chatId, payload.msg),
     })
+  }
+
+  /** Keeps the stored copy of an edited message current. Edit alerts stay with KakaoBot. */
+  private async applyEdit(room: RoomRow, serverId: string) {
+    const rows = await this.deps.iris.query("SELECT _id, user_id, v, message FROM chat_logs WHERE chat_id = ? AND id = ? LIMIT 1", [room.chatId, serverId])
+    const row = rows[0]
+    if (row?._id && row.message != null) this.deps.repo.updateMessageText(Number(row._id), row.message)
   }
 
   /** Alias → name Iris reported → KakaoTalk DB lookup → "(UID ...)". */
@@ -100,7 +121,9 @@ export class EventProcessor {
     return looked ?? `(UID: ${userId})`
   }
 
-  private lookupName(userId: string): Promise<string | null> {
+  /** The bot account's own name, then the bot's friend list, then open chat member lists. */
+  lookupName(userId: string): Promise<string | null> {
+    if (userId === this.deps.botUserId() && this.deps.botName()) return Promise.resolve(this.deps.botName())
     let pending = this.nameLookups.get(userId)
     if (!pending) {
       pending = (async () => {

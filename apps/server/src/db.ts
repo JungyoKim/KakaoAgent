@@ -60,6 +60,41 @@ const MIGRATIONS: string[] = [
     detail TEXT
   );
   `,
+  // v2: a copy of every message in registered rooms (live and backfilled from Iris), searchable with
+  // a trigram index, and how far each room's backfill got. 1:1 and memo rooms are hidden from members.
+  `
+  CREATE TABLE messages (
+    log_id INTEGER PRIMARY KEY,
+    server_id TEXT,
+    chat_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    type INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    attachment TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX messages_chat_time ON messages(chat_id, created_at);
+  CREATE INDEX messages_chat_user_time ON messages(chat_id, user_id, created_at);
+  CREATE INDEX messages_server ON messages(server_id);
+  CREATE VIRTUAL TABLE messages_fts USING fts5(text, content = 'messages', content_rowid = 'log_id', tokenize = 'trigram');
+  CREATE TRIGGER messages_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts (rowid, text) VALUES (new.log_id, new.text);
+  END;
+  CREATE TRIGGER messages_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts (messages_fts, rowid, text) VALUES ('delete', old.log_id, old.text);
+  END;
+  CREATE TRIGGER messages_au AFTER UPDATE OF text ON messages BEGIN
+    INSERT INTO messages_fts (messages_fts, rowid, text) VALUES ('delete', old.log_id, old.text);
+    INSERT INTO messages_fts (rowid, text) VALUES (new.log_id, new.text);
+  END;
+  CREATE TABLE room_sync (
+    chat_id TEXT PRIMARY KEY,
+    done INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+  UPDATE rooms SET member_visible = 0 WHERE kind IN ('direct', 'memo');
+  `,
 ]
 
 export function openDb(file: string): Database {

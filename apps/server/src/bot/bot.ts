@@ -1,7 +1,9 @@
 import type { Config } from "../config"
+import { startOfDayKst } from "../data/room-data"
 import { IrisClient } from "../iris/client"
 import { IrisSocket } from "../iris/socket"
-import type { Repo } from "../repo"
+import type { Repo, RoomRow } from "../repo"
+import { Backfill } from "./backfill"
 import { EventProcessor, type BotMessage } from "./events"
 import { Outbox } from "./outbox"
 
@@ -15,9 +17,10 @@ export class Bot {
   readonly iris: IrisClient
   readonly outbox: Outbox
   readonly processor: EventProcessor
+  readonly backfill: Backfill
   private socket: IrisSocket | null = null
+  private maintenance: ReturnType<typeof setInterval> | null = null
   private listeners: MessageListener[] = []
-  private counted = { day: "", messages: 0 }
   botUserId: string | null = null
   botName: string | null = null
 
@@ -33,9 +36,11 @@ export class Bot {
       iris: this.iris,
       isEcho: (chatId, text) => this.outbox.isEcho(chatId, text),
       botUserId: () => this.botUserId,
+      botName: () => this.botName,
       emit: (message) => this.dispatch(message),
       log,
     })
+    this.backfill = new Backfill(repo, this.iris, (userId) => this.processor.lookupName(userId), log)
   }
 
   get connected(): boolean {
@@ -46,9 +51,9 @@ export class Bot {
     return this.socket?.lastEventAt ?? null
   }
 
-  /** Messages seen today (Korea time) in registered rooms since the server started. */
+  /** Messages stored today (Korea time) in registered rooms that are on. */
   get messagesToday(): number {
-    return this.counted.day === this.today() ? this.counted.messages : 0
+    return this.repo.countMessagesSince(startOfDayKst(Date.now()))
   }
 
   onMessage(listener: MessageListener) {
@@ -71,24 +76,47 @@ export class Bot {
     this.socket.start()
     const allowed = this.config.sendRooms.length ? this.config.sendRooms.join(", ") : "every room"
     this.log(`[bot] started (send mode: ${this.config.sendMode}, may send to: ${allowed}, client: ${this.config.irisClientId})`)
+    void this.syncRooms()
+    // A backfill cut short (Iris restarting, say) picks up where it stopped.
+    this.maintenance = setInterval(() => void this.syncRooms(), 60 * 60 * 1000)
   }
 
   stop() {
     this.socket?.stop()
+    if (this.maintenance) clearInterval(this.maintenance)
   }
 
-  private today(): string {
-    return new Date().toLocaleDateString("en-CA", { timeZone: this.config.timezone })
+  /** Copies the past messages of every registered room that is on, one room at a time. */
+  async syncRooms() {
+    for (const room of this.repo.listRooms().filter((r) => r.enabled)) await this.backfill.syncRoom(room)
+  }
+
+  /** Starts copying a newly registered (or re-pointed) room's past messages in the background. */
+  syncRoom(room: RoomRow) {
+    if (this.config.irisUrl) void this.backfill.syncRoom(room)
   }
 
   /**
-   * Listener failures are logged and swallowed: a broken feature must not make Iris replay the
-   * event forever, and the message itself was handled.
+   * The message is stored first; a failure there makes Iris replay the event. Listener failures
+   * are logged and swallowed: a broken feature must not make Iris replay the event forever.
    */
   private async dispatch(message: BotMessage) {
-    const day = this.today()
-    if (this.counted.day !== day) this.counted = { day, messages: 0 }
-    this.counted.messages++
+    const logId = Number(message.logId)
+    if (Number.isSafeInteger(logId)) {
+      this.repo.saveMessages([
+        {
+          logId,
+          serverId: message.serverId,
+          chatId: message.room.chatId,
+          userId: message.senderId,
+          type: message.type,
+          kind: message.kind,
+          text: message.text,
+          attachment: message.attachmentRaw,
+          createdAt: message.time.getTime(),
+        },
+      ])
+    }
     this.log(`[msg] ${message.room.name} · ${message.sender} · ${message.kind}${message.fromBot ? " (bot)" : ""}`)
     for (const listener of this.listeners) {
       try {

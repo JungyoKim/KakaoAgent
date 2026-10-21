@@ -100,3 +100,35 @@ export interface AuditEntry {
   target: string | null
   detail: string | null
 }
+
+export interface PersonCount {
+  userId: string
+  name: string
+  count: number
+}
+
+/** Activity in one room over a period. Hours and dates are Korea time. */
+export interface RoomStats {
+  room: { id: string; name: string }
+  /** Start of the period (ms), or null for everything stored. */
+  from: number | null
+  total: number
+  /** Most active first. */
+  people: PersonCount[]
+  /** Messages per hour of the day, 0 to 23. */
+  hours: number[]
+  /** Messages per day (YYYY-MM-DD), oldest first; days without messages are left out. */
+  days: { date: string; count: number }[]
+  kinds: { kind: string; count: number }[]
+  /** Whether the room's past messages have all been copied from KakaoTalk yet. */
+  sync: { done: boolean; stored: number }
+}
+
+export interface MessageHit {
+  logId: string
+  at: number
+  userId: string
+  name: string
+  kind: string
+  text: string
+}

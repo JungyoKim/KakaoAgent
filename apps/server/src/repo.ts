@@ -36,6 +36,20 @@ export interface RoomRow {
   memberVisible: boolean
 }
 
+/** A message as stored in the messages table. */
+export interface StoredMessage {
+  logId: number
+  serverId: string | null
+  chatId: string
+  userId: string
+  type: number
+  kind: string
+  text: string
+  attachment: string | null
+  /** ms since epoch */
+  createdAt: number
+}
+
 const now = () => Date.now()
 const json = <T>(value: string | null, fallback: T): T => {
   if (value === null) return fallback
@@ -210,9 +224,11 @@ export class Repo {
   }
 
   createRoom(input: { chatId: string; name: string; kind: RoomKind }): RoomRow {
+    // A 1:1 chat or memo is private to the owner until they choose to show it to members.
+    const memberVisible = input.kind === "direct" || input.kind === "memo" ? 0 : 1
     const result = this.db
-      .query("INSERT INTO rooms (chat_id, name, kind, enabled, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)")
-      .run(input.chatId, input.name, input.kind, now(), now())
+      .query("INSERT INTO rooms (chat_id, name, kind, enabled, member_visible, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?)")
+      .run(input.chatId, input.name, input.kind, memberVisible, now(), now())
     return this.roomById(String(result.lastInsertRowid))!
   }
 
@@ -241,6 +257,72 @@ export class Repo {
   }
 
   // ─── KakaoTalk users and aliases ─────────────────────────────────────
+
+  /** Records that a user spoke in a room at a time; keeps the latest room and time. */
+  noteKakaoUser(userId: string, kakaoName: string | null, chatId: string, at: number) {
+    this.db
+      .query(
+        `INSERT INTO kakao_users (user_id, kakao_name, last_chat_id, last_seen_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET kakao_name = COALESCE(kakao_users.kakao_name, excluded.kakao_name),
+         last_chat_id = CASE WHEN COALESCE(kakao_users.last_seen_at, 0) < excluded.last_seen_at THEN excluded.last_chat_id ELSE kakao_users.last_chat_id END,
+         last_seen_at = MAX(COALESCE(kakao_users.last_seen_at, 0), excluded.last_seen_at)`,
+      )
+      .run(userId, kakaoName || null, chatId, at)
+  }
+
+  // ─── messages ────────────────────────────────────────────────────────
+
+  /** Stores messages; ones already stored (same log id) are left as they are. */
+  saveMessages(items: StoredMessage[]) {
+    const insert = this.db.query(
+      `INSERT OR IGNORE INTO messages (log_id, server_id, chat_id, user_id, type, kind, text, attachment, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    this.db.transaction(() => {
+      for (const m of items) insert.run(m.logId, m.serverId, m.chatId, m.userId, m.type, m.kind, m.text, m.attachment, m.createdAt)
+    })()
+  }
+
+  /** An edited message gets its new text (and the search index with it). */
+  updateMessageText(logId: number, text: string) {
+    this.db.query("UPDATE messages SET text = ? WHERE log_id = ?").run(text, logId)
+  }
+
+  oldestLogId(chatId: string): number | null {
+    const row = this.db.query("SELECT MIN(log_id) AS id FROM messages WHERE chat_id = ?").get(chatId) as any
+    return row?.id ?? null
+  }
+
+  messageCount(chatId: string): number {
+    return (this.db.query("SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?").get(chatId) as any).n
+  }
+
+  /** Messages since a time in rooms that are registered and on. */
+  countMessagesSince(since: number): number {
+    const row = this.db
+      .query("SELECT COUNT(*) AS n FROM messages m JOIN rooms r ON r.chat_id = m.chat_id WHERE r.enabled = 1 AND m.created_at >= ?")
+      .get(since) as any
+    return row.n
+  }
+
+  /** Each user who spoke in a room, with their last message time. */
+  roomSpeakers(chatId: string): { userId: string; lastAt: number }[] {
+    return this.db
+      .query("SELECT user_id, MAX(created_at) AS last_at FROM messages WHERE chat_id = ? GROUP BY user_id")
+      .all(chatId)
+      .map((r: any) => ({ userId: r.user_id, lastAt: r.last_at }))
+  }
+
+  roomSync(chatId: string): { done: boolean } {
+    const row = this.db.query("SELECT done FROM room_sync WHERE chat_id = ?").get(chatId) as any
+    return { done: !!row?.done }
+  }
+
+  setRoomSync(chatId: string, done: boolean) {
+    this.db
+      .query("INSERT INTO room_sync (chat_id, done, updated_at) VALUES (?, ?, ?) ON CONFLICT(chat_id) DO UPDATE SET done = excluded.done, updated_at = excluded.updated_at")
+      .run(chatId, done ? 1 : 0, now())
+  }
 
   seeKakaoUser(userId: string, kakaoName: string | null, chatId: string) {
     this.db

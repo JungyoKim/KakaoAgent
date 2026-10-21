@@ -151,6 +151,19 @@ describe("Agent", () => {
     expect(sent).toEqual([{ chatId: TEST_ROOM, text: "🤖 테스트 기억을 지웠어" }])
   })
 
+  test("an answer that skipped the tools is sent back once to use them", async () => {
+    const replies = [
+      { message: { content: "응, 기억해 둘게" }, model: "fake", usage: { prompt: 1, completion: 1 } },
+      { message: { content: null, tool_calls: [{ id: "c1", type: "function" as const, function: { name: "remember", arguments: '{"fact":"봇 테스트 중"}' } }] }, model: "fake", usage: { prompt: 1, completion: 1 } },
+      { message: { content: "기억했어!" }, model: "fake", usage: { prompt: 1, completion: 1 } },
+    ]
+    const { repo, agent, sent } = setup(async () => replies.shift()!)
+    agent.handle(message(TEST_ROOM, "/bot 나 봇 테스트 중이라고 기억해 줘"))
+    await agent.idle()
+    expect(repo.memories(TEST_ROOM, "1").map((m) => m.text)).toEqual(["봇 테스트 중"])
+    expect(sent).toEqual([{ chatId: TEST_ROOM, text: "🤖 기억했어!" }])
+  })
+
   test("showing and wiping your memories needs no model", async () => {
     let calls = 0
     const { repo, agent, sent } = setup(async () => {

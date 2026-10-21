@@ -11,6 +11,8 @@ const MAX_ANSWER = 2000
 const PREFIX = "🤖 "
 /** Japanese kana in an answer means the model drifted out of Korean. */
 const KANA = /[\u3040-\u30ff]/
+/** Questions that can only be answered from the room's data or memory; answering them without a tool is made up. */
+const NEEDS_TOOL = /(기억|저장|잊어|지워|통계|누가|누구|몇 ?(개|번|명)|말(을|이)? ?(많이|했)|얘기|이야기|성격|말투|아까|방금|최근|검색|찾아)/
 /** Earlier answers are given to the model only as follow-ups: same person, recent, a few. */
 const HISTORY_WINDOW_MS = 20 * 60 * 1000
 const HISTORY_TURNS = 3
@@ -129,8 +131,11 @@ export class Agent {
     let promptTokens = 0
     let completionTokens = 0
 
+    // The room's latest talk, without earlier "/bot" questions: they read as if already handled.
     const context = data
-      .recent(15, Number(message.logId) || undefined)
+      .recent(20, Number(message.logId) || undefined)
+      .filter((hit) => parseCommand(hit.text, this.deps.command) === null)
+      .slice(-12)
       .map((hit) => `${hit.name}: ${hit.text.replace(/\s+/g, " ").slice(0, 200)}`)
       .join("\n")
     const history: ChatMessage[] = this.deps.repo
@@ -177,6 +182,7 @@ export class Agent {
     let answer: string | null = null
     let error: string | null = null
     let fallback: string | null = null
+    let nudged = false
     try {
       for (let step = 0; step < MAX_STEPS && answer === null; step++) {
         const left = started + ANSWER_DEADLINE_MS - this.now()
@@ -188,6 +194,13 @@ export class Agent {
         completionTokens += result.usage.completion
         const calls = result.message.tool_calls ?? []
         if (!calls.length) {
+          // An answer about the room or memory that used no tool at all is a guess: ask once for the tool.
+          if (!used.length && !nudged && !last && NEEDS_TOOL.test(question) && result.message.content) {
+            nudged = true
+            messages.push({ role: "assistant", content: result.message.content })
+            messages.push({ role: "user", content: "방금은 도구를 쓰지 않고 답했어. 이 질문은 도구로 실제로 확인하거나 실행해야 해. 알맞은 도구를 불러." })
+            continue
+          }
           answer = result.message.content?.trim() || null
           // A model that slipped into another language rewrites its answer once, in Korean.
           if (answer && KANA.test(answer) && started + ANSWER_DEADLINE_MS - this.now() > 5_000) {

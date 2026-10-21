@@ -2,7 +2,7 @@
 **/dist
 **/.svelte-kit
 **/dev-dist
-data
+/data
 refs
 .git
 .codex

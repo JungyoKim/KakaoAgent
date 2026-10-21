@@ -5,7 +5,7 @@ dev-dist/
 *.tsbuildinfo
 
 # local data, secrets
-data/
+/data/
 .env
 .env.*
 !.env.example

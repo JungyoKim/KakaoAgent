@@ -60,18 +60,18 @@ export function openAiChat(options: { baseUrl: string; apiKey: string; models: s
   return async ({ messages, tools, timeoutMs }) => {
     const bodyFor = (model: string) => ({ model, messages, ...(tools?.length ? { tools } : {}), max_tokens: 1200 })
     const deadline = Date.now() + (timeoutMs ?? options.timeoutMs ?? 60_000)
-    // A single attempt gets at most 20 seconds, so a stuck provider leaves time to try another.
-    const attempt = (n: number) => {
+    // Up to three attempts, taking turns between the models; each gets at most 15 seconds, so a stuck
+    // or failing provider leaves time for another (free providers fail and stall often).
+    let lastError: unknown = new LlmError("LLM이 제때 답하지 않았어요")
+    for (let n = 0; n < 3; n++) {
       const left = deadline - Date.now()
-      if (left < 3_000) throw new LlmError("LLM이 제때 답하지 않았어요")
-      return call(bodyFor(models[Math.min(n, models.length - 1)]!), Math.min(20_000, left))
+      if (left < 3_000) break
+      try {
+        return await call(bodyFor(models[n % models.length]!), Math.min(15_000, left))
+      } catch (error) {
+        lastError = error
+      }
     }
-    try {
-      return await attempt(0)
-    } catch (error) {
-      // One retry: the router often has another provider ready when one is slow, rate-limited or down.
-      if (error instanceof LlmError && /제때/.test(error.message)) throw error
-      return await attempt(1)
-    }
+    throw lastError
   }
 }

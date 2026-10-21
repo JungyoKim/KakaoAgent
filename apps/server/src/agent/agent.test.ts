@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { BotMessage } from "../bot/events"
 import { openDb } from "../db"
 import { Repo } from "../repo"
-import { Agent, parseCommand, plainText } from "./agent"
+import { Agent, isForgetAll, isShowMemory, parseCommand, plainText } from "./agent"
 import type { ChatFn, ChatMessage } from "./llm"
 
 const TEST_ROOM = "284735378053547"
@@ -60,6 +60,13 @@ describe("parseCommand and plainText", () => {
 
   test("markdown marks are taken out for KakaoTalk", () => {
     expect(plainText("## 결과\n**민교**가 1등\n\n\n\n`끝`")).toBe("결과\n민교가 1등\n\n끝")
+  })
+
+  test("plain memory requests are recognised, remember requests are not", () => {
+    for (const q of ["내 기억 보여줘", "나에 대해 뭐 기억해?", "내 메모 알려줘", "나에 대한 기억 목록"]) expect(isShowMemory(q)).toBe(true)
+    for (const q of ["나 시험이라고 기억해 줘", "내 기억 지워줘", "민교 성격 어때?", "이번 주 통계"]) expect(isShowMemory(q)).toBe(false)
+    for (const q of ["기억 다 지워줘", "나에 대한 거 전부 잊어줘", "내 메모 싹 지워"]) expect(isForgetAll(q)).toBe(true)
+    for (const q of ["시험 기억만 지워줘", "내 기억 보여줘", "다 같이 밥 먹자"]) expect(isForgetAll(q)).toBe(false)
   })
 })
 
@@ -130,5 +137,24 @@ describe("Agent", () => {
     await agent.idle()
     expect(sent[0]!.text).toMatch(/^🤖 준교에 대해 기억했어요 \(#\d+\): 봇 테스트 중$/)
     expect(repo.memories(TEST_ROOM, "1").map((m) => m.text)).toEqual(["봇 테스트 중"])
+  })
+
+  test("showing and wiping your memories needs no model", async () => {
+    let calls = 0
+    const { repo, agent, sent } = setup(async () => {
+      calls++
+      throw new Error("not used")
+    })
+    repo.addMemory(TEST_ROOM, "1", "봇 테스트 중")
+    agent.handle(message(TEST_ROOM, "/bot 내 기억 보여줘"))
+    agent.handle(message(TEST_ROOM, "/bot 기억 다 지워줘"))
+    agent.handle(message(TEST_ROOM, "/bot 내 기억 보여줘"))
+    await agent.idle()
+    expect(calls).toBe(0)
+    expect(sent.map((s) => s.text)).toEqual([
+      expect.stringMatching(/^🤖 준교에 대해 기억하는 것\n• 봇 테스트 중 \(#\d+\)$/),
+      "🤖 준교에 대해 기억하던 1개를 모두 잊었어요.",
+      expect.stringContaining("아직 준교에 대해 기억하는 게 없어요"),
+    ])
   })
 })

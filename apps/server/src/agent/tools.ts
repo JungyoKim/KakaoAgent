@@ -157,7 +157,23 @@ export function roomTools(data: RoomData): AgentTool[] {
 const MAX_TOLD = 50
 const MAX_FACT = 200
 
-function memoryLines(items: { id: number; kind: string; text: string; updatedAt: number }[]): string {
+type MemoryItem = { id: number; kind: string; text: string; updatedAt: number }
+
+/** A person's memories as KakaoTalk text, for answering "내 기억 보여줘" without the model. */
+export function describeMemory(name: string, items: MemoryItem[]): string {
+  const told = items.filter((m) => m.kind === "told")
+  const note = items.find((m) => m.kind === "observed")
+  if (!told.length && !note) return `아직 ${name}에 대해 기억하는 게 없어요. "/bot ○○ 기억해 줘"라고 말해 주세요.`
+  return [
+    `${name}에 대해 기억하는 것`,
+    ...told.map((m) => `• ${m.text} (#${m.id})`),
+    note ? `\n대화에서 정리한 메모\n${note.text}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+function memoryLines(items: MemoryItem[]): string {
   const day = (at: number) => new Date(at + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const told = items.filter((m) => m.kind === "told").map((m) => `#${m.id} ${m.text} (${day(m.updatedAt)})`)
   const note = items.find((m) => m.kind === "observed")

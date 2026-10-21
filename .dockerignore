@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.svelte-kit
+**/dev-dist
+data
+refs
+.git
+.codex
+*.log
+.env
+

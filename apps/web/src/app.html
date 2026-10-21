@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+		<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+		<meta name="description" content="카카오톡 봇을 관리하는 곳" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<meta name="apple-mobile-web-app-title" content="봇" />
+		<meta name="format-detection" content="telephone=no" />
+		<link rel="icon" href="/favicon.ico" sizes="48x48" />
+		<link rel="icon" href="/logo.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		%app.splash%
+		<title>봇</title>
+		<script>
+			// Apply the saved theme before the first paint (no light flash in dark mode) and make the
+			// browser and status bar color follow the app theme rather than the OS setting.
+			(function () {
+				try {
+					var saved = localStorage.getItem('theme');
+					var dark = saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+					document.documentElement.classList.add(dark ? 'dark' : 'light');
+					if (saved === 'dark' || saved === 'light') {
+						document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+							meta.removeAttribute('media');
+							meta.setAttribute('content', dark ? '#000000' : '#f2f2f7');
+						});
+					}
+				} catch (e) {}
+			})();
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
+

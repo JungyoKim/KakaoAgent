@@ -1,0 +1,4 @@
+/.svelte-kit
+/dist
+/dev-dist
+vite.config.ts.timestamp-*

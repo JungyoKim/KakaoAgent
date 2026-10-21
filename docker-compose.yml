@@ -1,0 +1,22 @@
+# Dokploy deploys this as a Compose app (plain containers, not a Swarm service), so Traefik reaches
+# the container directly and every deploy stops the old container before starting the new one.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      IRIS_URL: ${IRIS_URL}
+      IRIS_TOKEN: ${IRIS_TOKEN}
+      IRIS_CLIENT_ID: ${IRIS_CLIENT_ID:-kakao-agent}
+      SEND_MODE: ${SEND_MODE:-live}
+      SEND_ROOMS: ${SEND_ROOMS:-284735378053547}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET}
+      PUBLIC_URL: ${PUBLIC_URL:-https://bot.xenv.cc}
+    volumes:
+      - kakao-agent-data:/app/data
+    expose:
+      - "8080"
+
+volumes:
+  kakao-agent-data:

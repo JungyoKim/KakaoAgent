@@ -1,0 +1,21 @@
+# dependencies / build output
+node_modules/
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# local data, secrets
+data/
+.env
+.env.*
+!.env.example
+*.log
+
+# reference clones and scratch (not part of this repo)
+refs/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

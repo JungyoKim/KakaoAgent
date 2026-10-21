@@ -1,0 +1,467 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
+
+@custom-variant dark (&:is(.dark *));
+/* Phones: a touch screen narrower than the md breakpoint. */
+@custom-variant phone (@media (pointer: coarse) and (width < 48rem));
+/*
+ * Focus rings are for keyboard users only. The root layout sets <html data-keyboard> after a Tab
+ * and clears it on the next tap or click, so a tapped button or closed menu doesn't keep a ring.
+ * Text fields use focus: instead and show theirs while you type.
+ */
+@custom-variant focus-visible (&:focus-visible:where([data-keyboard] *));
+
+/*
+ * Colors follow iOS: a light gray grouped background with white cards (black and #1c1c1e in dark
+ * mode), the system blue tint, gray fills for fields and secondary buttons, and green switches.
+ */
+:root {
+	--background: #f2f2f7;
+	--foreground: #000000;
+	--card: #ffffff;
+	--card-foreground: #000000;
+	--popover: #ffffff;
+	--popover-foreground: #000000;
+	--primary: #007aff;
+	--primary-foreground: #ffffff;
+	--secondary: rgb(118 118 128 / 0.12);
+	--secondary-foreground: #007aff;
+	--muted: rgb(118 118 128 / 0.12);
+	--muted-foreground: rgb(60 60 67 / 0.6);
+	--accent: rgb(118 118 128 / 0.12);
+	--accent-foreground: #000000;
+	--destructive: #ff3b30;
+	--border: rgb(60 60 67 / 0.18);
+	--input: rgb(118 118 128 / 0.24);
+	--ring: #007aff;
+	--chart-1: oklch(0.809 0.105 251.813);
+	--chart-2: oklch(0.623 0.214 259.815);
+	--chart-3: oklch(0.546 0.245 262.881);
+	--chart-4: oklch(0.488 0.243 264.376);
+	--chart-5: oklch(0.424 0.199 265.638);
+	--radius: 0.625rem;
+	--sidebar: #f9f9f9;
+	--sidebar-foreground: #000000;
+	--sidebar-primary: #007aff;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: rgb(118 118 128 / 0.12);
+	--sidebar-accent-foreground: #000000;
+	--sidebar-border: rgb(60 60 67 / 0.18);
+	--sidebar-ring: #007aff;
+	--switch-on: #34c759;
+	--control-selected: #ffffff;
+}
+
+.dark {
+	--background: #000000;
+	--foreground: #ffffff;
+	--card: #1c1c1e;
+	--card-foreground: #ffffff;
+	--popover: #1c1c1e;
+	--popover-foreground: #ffffff;
+	--primary: #0a84ff;
+	--primary-foreground: #ffffff;
+	--secondary: rgb(118 118 128 / 0.24);
+	--secondary-foreground: #0a84ff;
+	--muted: rgb(118 118 128 / 0.24);
+	--muted-foreground: rgb(235 235 245 / 0.6);
+	--accent: rgb(118 118 128 / 0.24);
+	--accent-foreground: #ffffff;
+	--destructive: #ff453a;
+	--border: rgb(84 84 88 / 0.5);
+	--input: rgb(118 118 128 / 0.48);
+	--ring: #0a84ff;
+	--chart-1: oklch(0.809 0.105 251.813);
+	--chart-2: oklch(0.623 0.214 259.815);
+	--chart-3: oklch(0.546 0.245 262.881);
+	--chart-4: oklch(0.488 0.243 264.376);
+	--chart-5: oklch(0.424 0.199 265.638);
+	--sidebar: #161616;
+	--sidebar-foreground: #ffffff;
+	--sidebar-primary: #0a84ff;
+	--sidebar-primary-foreground: #ffffff;
+	--sidebar-accent: rgb(118 118 128 / 0.24);
+	--sidebar-accent-foreground: #ffffff;
+	--sidebar-border: rgb(84 84 88 / 0.5);
+	--sidebar-ring: #0a84ff;
+	--switch-on: #30d158;
+	--control-selected: #636366;
+}
+
+/*
+ * Sheets that hold grouped cards (data-grouped) sit on the grouped gray, like iOS. In dark mode that
+ * surface is raised to #1c1c1e and its cards one step lighter, so the sheet stands off the black page.
+ */
+.dark [data-grouped] {
+	--background: #1c1c1e;
+	--card: #2c2c2e;
+}
+
+@theme inline {
+	--font-heading: var(--font-sans);
+	/* Pretendard everywhere, Apple devices included; system fonts only until it loads. */
+	--font-sans:
+		'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR',
+		'Malgun Gothic', sans-serif;
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+		scrollbar-width: thin;
+	}
+	/* Scrollbars follow the app theme, which is a class on <html>. */
+	:root {
+		scrollbar-color: var(--scrollbar-thumb) transparent;
+	}
+	body {
+		@apply bg-background text-foreground overscroll-none;
+	}
+	html {
+		@apply font-sans;
+		/* Taps get their own pressed styles, and double-tap never zooms the app (pinch still does). */
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
+	}
+	/* No link preview or image menu on a long press; the app handles its own presses. */
+	a,
+	img {
+		-webkit-touch-callout: none;
+	}
+}
+
+/* Form controls follow the app theme, which is a class on <html>. */
+:root {
+	color-scheme: light;
+	--scrollbar-thumb: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+	--scrollbar-thumb-hover: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+}
+:root.dark {
+	color-scheme: dark;
+}
+
+/*
+ * With a mouse, where scrollbars take up room, every scrollbar is a thin rounded thumb on a clear
+ * track, with no arrows at the ends. A scroll area that runs into rounded corners stops its track
+ * short of them with --scrollbar-inset-top and --scrollbar-inset-bottom, so the scrollbar doesn't poke
+ * out past the curve. Chrome only reads these styles once the standard scrollbar properties are auto;
+ * utilities such as [scrollbar-width:none] still win over this base layer. Touch screens keep their
+ * own floating scrollbars.
+ */
+@layer base {
+	@supports selector(::-webkit-scrollbar) {
+		@media (hover: hover) and (pointer: fine) {
+			:root,
+			* {
+				scrollbar-width: auto;
+				scrollbar-color: auto;
+			}
+			::-webkit-scrollbar {
+				width: 10px;
+				height: 10px;
+				background: transparent;
+			}
+			::-webkit-scrollbar-track {
+				margin-block: var(--scrollbar-inset-top, 0px) var(--scrollbar-inset-bottom, 0px);
+			}
+			::-webkit-scrollbar-thumb {
+				border: 2px solid transparent;
+				border-radius: 9999px;
+				background: var(--scrollbar-thumb) padding-box;
+			}
+			::-webkit-scrollbar-thumb:hover {
+				background-color: var(--scrollbar-thumb-hover);
+			}
+			::-webkit-scrollbar-button,
+			::-webkit-scrollbar-corner {
+				display: none;
+			}
+		}
+	}
+}
+
+/* Stops a scrollbar's track short of rounded corners, by a radius: scrollbar-inset-y-3xl, scrollbar-inset-b-[1.625rem]. */
+@utility scrollbar-inset-y-* {
+	--scrollbar-inset-top: --value(--radius-*, [length]);
+	--scrollbar-inset-bottom: --value(--radius-*, [length]);
+}
+@utility scrollbar-inset-b-* {
+	--scrollbar-inset-bottom: --value(--radius-*, [length]);
+}
+
+/* Right padding less the room a scrollbar takes (trackScrollbar in $lib/scrollbar.ts): pr-edge-4. */
+@utility pr-edge-* {
+	padding-right: max(0px, calc(var(--spacing) * --value(number) - var(--scrollbar, 0px)));
+}
+
+/*
+ * Below the md breakpoint (the phone layout): Apple's text sizes. Body text, buttons, fields and menu
+ * items are 17px and small print is 13px; wider screens keep the denser desktop sizes.
+ */
+@media (width < 48rem) {
+	:root {
+		--text-xs: 0.8125rem;
+		--text-xs--line-height: 1.125rem;
+		--text-sm: 1.0625rem;
+		--text-sm--line-height: 1.375rem;
+		--text-base: 1.0625rem;
+		--text-base--line-height: 1.375rem;
+	}
+}
+
+/* Control heights; touch screens get Apple's 44px minimum touch target. */
+:root {
+	--h-control: calc(var(--spacing) * 9);
+	--h-control-sm: calc(var(--spacing) * 8);
+	--h-control-lg: calc(var(--spacing) * 10);
+}
+@media (pointer: coarse) {
+	:root {
+		--h-control: calc(var(--spacing) * 11);
+		--h-control-sm: calc(var(--spacing) * 10);
+		--h-control-lg: calc(var(--spacing) * 12);
+	}
+}
+
+/*
+ * Top inset: iOS blurs the top edge of a home-screen app, so on phones content starts at least
+ * 1rem down and only the plain background strip (in +layout.svelte) sits under the blur.
+ */
+:root {
+	--inset-top: env(safe-area-inset-top);
+	@variant phone {
+		--inset-top: max(1rem, env(safe-area-inset-top));
+	}
+}
+
+/*
+ * Full-screen height. The installed iPhone app sizes every viewport unit to the whole screen, so
+ * there the app uses 100% of the window instead (html and body are 100% tall).
+ */
+html,
+body {
+	height: 100%;
+}
+/*
+ * Floating controls in the iOS 26 manner: the card color, a little see-through with a light blur,
+ * a hairline edge and a soft shadow. Only small elements use it; blur is costly on large areas.
+ */
+:root {
+	--glass-edge: rgb(0 0 0 / 0.06);
+	--glass-shadow: 0 8px 24px -10px rgb(0 0 0 / 0.22);
+}
+.dark {
+	--glass-edge: rgb(255 255 255 / 0.12);
+	--glass-shadow: 0 8px 24px -10px rgb(0 0 0 / 0.7);
+}
+@utility glass {
+	background-color: color-mix(in oklab, var(--card) 82%, transparent);
+	-webkit-backdrop-filter: blur(16px) saturate(1.6);
+	backdrop-filter: blur(16px) saturate(1.6);
+	box-shadow:
+		0 0 0 0.5px var(--glass-edge),
+		var(--glass-shadow);
+}
+
+/*
+ * Toasts (svelte-sonner, toaster.svelte) as iOS banners: the same glass as the editor toolbar, a
+ * rounded card with a larger semibold line, colored icons, and a capsule for the action button.
+ * The toaster prefix outranks svelte-sonner's own rules, which stay on for stacking.
+ */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+	border: none;
+	border-radius: 1.625rem;
+	padding: 0.8125rem 1rem;
+	gap: 0.625rem;
+	color: var(--foreground);
+	font-size: 0.9375rem;
+	background-color: color-mix(in oklab, var(--card) 82%, transparent);
+	-webkit-backdrop-filter: blur(16px) saturate(1.6);
+	backdrop-filter: blur(16px) saturate(1.6);
+	box-shadow:
+		0 0 0 0.5px var(--glass-edge),
+		var(--glass-shadow);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+	font-weight: 600;
+	line-height: 1.35;
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
+	color: var(--muted-foreground);
+	font-size: 0.8125rem;
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
+	width: 1.25rem;
+	height: 1.25rem;
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+	height: 2rem;
+	padding: 0 0.875rem;
+	border-radius: 9999px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-cancel] {
+	background: var(--muted);
+	color: var(--foreground);
+}
+
+@utility h-app {
+	height: 100svh;
+	@media (display-mode: standalone) {
+		height: 100%;
+	}
+}
+
+/*
+ * Page changes (see onNavigate in +layout.svelte). On phones, pages pushed on top of a tab page
+ * slide in from the right over it and slide back out when you go back, like a navigation stack;
+ * everything else cross-fades quickly. The top strip keeps its own transition name, and so does
+ * the tab bar when both pages have it, so they stay put while the page under them changes.
+ */
+:root[data-tab-bar='keep'] [data-tab-bar] {
+	view-transition-name: tab-bar;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 140ms;
+	animation-timing-function: ease-out;
+}
+:root[data-nav='forward']::view-transition-old(root),
+:root[data-nav='forward']::view-transition-new(root),
+:root[data-nav='back']::view-transition-old(root),
+:root[data-nav='back']::view-transition-new(root) {
+	mix-blend-mode: normal;
+	animation-duration: 260ms;
+	animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+	animation-fill-mode: both;
+}
+:root[data-nav='forward']::view-transition-old(root) {
+	animation-name: vt-push-under;
+}
+:root[data-nav='forward']::view-transition-new(root) {
+	animation-name: vt-push-in;
+}
+:root[data-nav='back']::view-transition-old(root) {
+	z-index: 1;
+	animation-name: vt-pop-out;
+}
+:root[data-nav='back']::view-transition-new(root) {
+	animation-name: vt-pop-under;
+}
+@keyframes vt-push-in {
+	from {
+		transform: translateX(100%);
+	}
+}
+@keyframes vt-push-under {
+	to {
+		transform: translateX(-25%);
+		filter: brightness(0.9);
+	}
+}
+@keyframes vt-pop-out {
+	to {
+		transform: translateX(100%);
+	}
+}
+@keyframes vt-pop-under {
+	from {
+		transform: translateX(-25%);
+		filter: brightness(0.9);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
+	}
+}
+
+/* The browser's own focus outline follows the same rule. */
+@layer base {
+	html:not([data-keyboard]) :focus-visible {
+		outline: none;
+	}
+}
+
+/*
+ * Framework7 Icons (icon.svelte). The element is a box that sizes like an <svg> icon did: 24px until a
+ * size utility or its container sets one. Its name, as CSS content, becomes the glyph through the
+ * icon font's ligatures, scaled to the box with container units. Inherited text styles must not
+ * break the ligature or thicken the glyph.
+ */
+@layer base {
+	.f7 {
+		display: block;
+		position: relative;
+		width: 24px;
+		height: 24px;
+		container-type: size;
+		font-style: normal;
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	.f7::before {
+		content: attr(data-f7);
+		position: absolute;
+		inset: 0;
+		font-family: 'Framework7 Icons';
+		font-size: 100cqmin;
+		line-height: 1;
+		font-weight: normal;
+		font-style: normal;
+		font-synthesis: none;
+		letter-spacing: normal;
+		word-spacing: normal;
+		text-transform: none;
+		white-space: nowrap;
+		text-align: center;
+		font-feature-settings: 'liga';
+		font-variant-ligatures: common-ligatures;
+		-webkit-font-smoothing: antialiased;
+	}
+}

@@ -90,6 +90,8 @@ export interface SystemStatus {
   sendRooms: string[] | null
   counts: { rooms: number; messagesToday: number }
   limits: Limits
+  /** Alerts this bot sends itself. deletedEmoticon: a deleted emoticon is sent back (KakaoBot does it too). */
+  alerts: { deletedEmoticon: boolean }
 }
 
 export interface AuditEntry {

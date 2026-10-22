@@ -4,6 +4,8 @@ import { IrisClient } from "../iris/client"
 import { IrisSocket } from "../iris/socket"
 import type { Repo, RoomRow } from "../repo"
 import { Backfill } from "./backfill"
+import { DeletedEmoticons } from "./deleted"
+import { emoticonPath, getEmoticonImage, prefetchEmoticonImage } from "./emoticon"
 import { EventProcessor, type BotMessage } from "./events"
 import { Outbox } from "./outbox"
 
@@ -18,6 +20,7 @@ export class Bot {
   readonly outbox: Outbox
   readonly processor: EventProcessor
   readonly backfill: Backfill
+  readonly deletedEmoticons: DeletedEmoticons
   private socket: IrisSocket | null = null
   private maintenance: ReturnType<typeof setInterval> | null = null
   private listeners: MessageListener[] = []
@@ -38,9 +41,26 @@ export class Bot {
       botUserId: () => this.botUserId,
       botName: () => this.botName,
       emit: (message) => this.dispatch(message),
+      onDeleted: (room, serverId) => this.deletedEmoticons.handle(room, serverId),
       log,
     })
     this.backfill = new Backfill(repo, this.iris, (userId) => this.processor.lookupName(userId), log)
+    this.deletedEmoticons = new DeletedEmoticons({
+      enabled: () => repo.setting("alerts.deletedEmoticon", false),
+      canSend: (chatId) => this.outbox.canSend(chatId),
+      find: async (room, serverId) => {
+        const stored = repo.messageByServerId(room.chatId, serverId)
+        if (stored) return { userId: stored.userId, text: stored.text, attachment: stored.attachment }
+        const rows = await this.iris.query("SELECT user_id, message, attachment, v FROM chat_logs WHERE chat_id = ? AND id = ? LIMIT 1", [room.chatId, serverId])
+        const row = rows[0]
+        return row ? { userId: row.user_id ?? "", text: row.message ?? "", attachment: row.attachment } : null
+      },
+      senderName: (userId) => this.processor.senderName(userId, ""),
+      fetchImage: (itemPath) => getEmoticonImage(itemPath),
+      sendText: (chatId, text) => this.outbox.sendText(chatId, text),
+      sendImage: (chatId, base64) => this.outbox.sendImage(chatId, base64),
+      log,
+    })
   }
 
   get connected(): boolean {
@@ -119,6 +139,9 @@ export class Bot {
       ])
     }
     this.log(`[msg] ${message.room.name} · ${message.sender} · ${message.kind}${message.fromBot ? " (bot)" : ""}`)
+    // With deleted-emoticon alerts on, an emoticon is converted now so a deletion sends it at once.
+    const emoticon = emoticonPath(message.attachment)
+    if (emoticon && this.repo.setting("alerts.deletedEmoticon", false) && this.outbox.canSend(message.room.chatId)) prefetchEmoticonImage(emoticon)
     for (const listener of this.listeners) {
       try {
         await listener(message)

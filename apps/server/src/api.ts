@@ -465,6 +465,7 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
       sendRooms: user(c).role === "owner" ? sendRooms : null,
       counts: { rooms: rooms.length, messagesToday: bot.messagesToday },
       limits: repo.limits(),
+      alerts: { deletedEmoticon: repo.setting("alerts.deletedEmoticon", false) },
     }
     return c.json(status)
   })
@@ -492,6 +493,14 @@ export function createApi(repo: Repo, bot: Bot, options: ApiOptions = {}) {
   })
 
   api.get("/audit", requireOwner, (c) => c.json(repo.listAudit(Math.min(500, Number(c.req.query("limit") ?? 200)))))
+
+  api.put("/system/alerts", requireOwner, async (c) => {
+    const input = await body(c, z.object({ deletedEmoticon: z.boolean() }))
+    if (isResponse(input)) return input
+    repo.setSetting("alerts.deletedEmoticon", input.deletedEmoticon)
+    repo.audit(user(c).id, "system.alerts", null, input)
+    return c.json(input)
+  })
 
   // ─── agent (owner) ───────────────────────────────────────────────────
 

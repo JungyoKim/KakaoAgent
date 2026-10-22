@@ -25,6 +25,7 @@
 		'system.pause': '전체 일시 정지',
 		'system.resume': '다시 시작',
 		'system.limits': '보내기 한도 변경',
+		'system.alerts': '알림 설정 변경',
 		'name.alias': '표시 이름 변경',
 		'memory.delete': '기억 지움',
 		'memory.refresh': '메모 정리',
@@ -41,6 +42,16 @@
 		try {
 			await post('/system/pause', { paused });
 			toast.success(paused ? '봇을 멈췄어요' : '다시 시작했어요');
+			await invalidate('/system/status', '/audit');
+		} catch (error) {
+			toast.error(errorMessage(error));
+		}
+	}
+
+	async function setEmoticonAlert(on: boolean) {
+		try {
+			await put('/system/alerts', { deletedEmoticon: on });
+			toast.success(on ? '삭제된 이모티콘을 다시 보낼게요' : '삭제된 이모티콘을 보내지 않을게요');
 			await invalidate('/system/status', '/audit');
 		} catch (error) {
 			toast.error(errorMessage(error));
@@ -126,6 +137,17 @@
 		<Switch
 			aria-labelledby="pause-all-label"
 			bind:checked={() => status.data?.paused ?? false, (on) => (on ? (confirmPause = true) : setPaused(false))}
+		/>
+	</div>
+
+	<div class="flex min-h-14 items-center gap-3 rounded-[1.625rem] bg-card py-2 pr-4 pl-4">
+		<span class="flex min-w-0 flex-1 flex-col">
+			<span id="emoticon-alert-label" class="text-sm font-medium">삭제된 이모티콘 다시 보내기</span>
+			<span class="text-xs text-muted-foreground">KakaoBot이 같은 알림을 보내는 동안에는 꺼 두세요</span>
+		</span>
+		<Switch
+			aria-labelledby="emoticon-alert-label"
+			bind:checked={() => status.data?.alerts.deletedEmoticon ?? false, (on) => setEmoticonAlert(on)}
 		/>
 	</div>
 

@@ -283,6 +283,23 @@ export class Repo {
     })()
   }
 
+  /** A stored message by its chat_logs.id, which deletion and edit feeds refer to. */
+  messageByServerId(chatId: string, serverId: string): StoredMessage | null {
+    const r = this.db.query("SELECT * FROM messages WHERE chat_id = ? AND server_id = ? LIMIT 1").get(chatId, serverId) as any
+    if (!r) return null
+    return {
+      logId: r.log_id,
+      serverId: r.server_id,
+      chatId: r.chat_id,
+      userId: r.user_id,
+      type: r.type,
+      kind: r.kind,
+      text: r.text,
+      attachment: r.attachment,
+      createdAt: r.created_at,
+    }
+  }
+
   /** An edited message gets its new text (and the search index with it). */
   updateMessageText(logId: number, text: string) {
     this.db.query("UPDATE messages SET text = ? WHERE log_id = ?").run(text, logId)

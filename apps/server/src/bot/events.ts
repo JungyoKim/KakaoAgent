@@ -40,6 +40,8 @@ export interface EventProcessorDeps {
   botUserId(): string | null
   botName(): string | null
   emit(message: BotMessage): Promise<void>
+  /** A message was deleted in a registered room (feedType 14); serverId is its chat_logs.id. */
+  onDeleted?(room: RoomRef, serverId: string): Promise<void>
   log(message: string): void
 }
 
@@ -49,6 +51,12 @@ const isFeed = (message: string) => message.startsWith("{") && message.includes(
 /** feedType 25 is an edit; its logId is the edited message's server log id (64-bit, read as text). */
 function editedServerId(message: string): string | null {
   if (Number(message.match(/"feedType"\s*:\s*(\d+)/)?.[1]) !== 25) return null
+  return message.match(/"logId"\s*:\s*"?(\d+)"?/)?.[1] ?? null
+}
+
+/** feedType 14 is a deletion; its logId is the deleted message's server log id. */
+function deletedServerId(message: string): string | null {
+  if (Number(message.match(/"feedType"\s*:\s*(\d+)/)?.[1]) !== 14) return null
   return message.match(/"logId"\s*:\s*"?(\d+)"?/)?.[1] ?? null
 }
 
@@ -76,6 +84,8 @@ export class EventProcessor {
     if (feed) {
       const serverId = editedServerId(payload.msg)
       if (serverId) await this.applyEdit(room, serverId)
+      const deletedId = deletedServerId(payload.msg)
+      if (deletedId) await this.deps.onDeleted?.(this.roomRef(room), deletedId)
       return
     }
 
